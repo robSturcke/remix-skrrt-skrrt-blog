@@ -54,6 +54,14 @@ export async function requireUserId(
   return userId;
 }
 
+export async function requireAdminUser(request: Request) {
+  const user = await requireUser(request)
+  if (user.email !== ENV.ADMIN_EMAIL) {
+    throw await logout(request)
+  }
+  return user;
+}
+
 export async function requireUser(request: Request) {
   const userId = await requireUserId(request);
 
