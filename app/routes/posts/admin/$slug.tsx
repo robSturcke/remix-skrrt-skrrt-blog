@@ -8,17 +8,26 @@ import type { ActionFunction, LoaderFunction } from "@remix-run/server-runtime";
 import { json } from "@remix-run/server-runtime";
 import { redirect } from "@remix-run/server-runtime";
 import invariant from "tiny-invariant";
-import { createPost, getPost, updatePost } from "~/models/post.server";
+import type { Post } from "@prisma/client";
+import {
+  createPost,
+  deletePost,
+  getPost,
+  updatePost,
+} from "~/models/post.server";
 import { requireAdminUser } from "~/session.server";
+
+type LoaderData = { post?: Post };
 
 export const loader: LoaderFunction = async ({ request, params }) => {
   await requireAdminUser(request);
   // return json({});
+  invariant(params.slug, "slug is required");
   if (params.slug == "new") {
-    return json({});
+    return json<LoaderData>({});
   }
   const post = await getPost(params.slug);
-  return json({ post });
+  return json<LoaderData>({ post });
 };
 
 type ActionData =
@@ -39,6 +48,13 @@ export const action: ActionFunction = async ({ request, params }) => {
   // console.log(await request.formData());
   await requireAdminUser(request);
   const formData = await request.formData();
+  const intent = formData.get("intent");
+
+  invariant(params.slug, "slug is required");
+  if (intent == "delete") {
+    await deletePost(params.slug);
+    return redirect(`/posts/admin`);
+  }
 
   const title = formData.get("title");
   const slug = formData.get("slug");
@@ -63,7 +79,6 @@ export const action: ActionFunction = async ({ request, params }) => {
   if (params.slug == "new") {
     await createPost({ title, slug, markdown });
   } else {
-    // TODO update post
     await updatePost(params.slug, { title, slug, markdown });
   }
 
@@ -73,13 +88,14 @@ export const action: ActionFunction = async ({ request, params }) => {
 const inputClassName = `w-full rounded border border-gray-500 px-2 py-1 text-lg`;
 
 export default function NewPostRoute() {
-  const data = useLoaderData();
+  const data = useLoaderData() as LoaderData;
   const errors = useActionData() as ActionData;
 
   const transition = useTransition();
   // const isCreating = Boolean(transition.submission);
   const isCreating = transition.submission?.formData.get("intent") == "create";
   const isUpdating = transition.submission?.formData.get("intent") == "update";
+  const isDeleting = transition.submission?.formData.get("intent") == "delete";
 
   const isNewPost = !data.post;
 
@@ -126,7 +142,18 @@ export default function NewPostRoute() {
           defaultValue={data.post?.markdown}
         />
       </p>
-      <p className="text-right">
+      <div className="flex justify-end gap-4">
+        {isNewPost ? null : (
+          <button
+            type="submit"
+            name="intent"
+            value="delete"
+            className="rounded bg-red-500 py-2 px-4 text-white hover:bg-red-600 disabled:bg-red-300"
+            disabled={isDeleting}
+          >
+            {isDeleting ? "Deleting..." : "Delete"}
+          </button>
+        )}
         <button
           type="submit"
           name="intent"
@@ -137,7 +164,7 @@ export default function NewPostRoute() {
           {isNewPost ? (isCreating ? "Creating..." : "Create Post") : null}
           {isNewPost ? null : isUpdating ? "Updating..." : "Update"}
         </button>
-      </p>
+      </div>
     </Form>
   );
 }
