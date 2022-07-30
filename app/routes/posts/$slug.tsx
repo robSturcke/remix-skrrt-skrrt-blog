@@ -16,6 +16,7 @@ export const loader: LoaderFunction = async ({ params }) => {
   const post = await getPost(slug);
 
   invariant(post, `post not found: ${slug}`);
+
   const html = marked(post.markdown);
   return json<LoaderData>({ title: post.title, html });
 };
