@@ -6,26 +6,24 @@ import {
   useParams,
   useTransition,
 } from "@remix-run/react";
-import type { ActionFunction, LoaderFunction } from "@remix-run/server-runtime";
-import { json } from "@remix-run/server-runtime";
-import { redirect } from "@remix-run/server-runtime";
-import invariant from "tiny-invariant";
-import type { Post } from "@prisma/client";
+import { redirect, json } from "@remix-run/node";
+import type { ActionFunction, LoaderFunction } from "@remix-run/node";
+import type { Post } from "~/models/post.server";
 import {
   createPost,
   deletePost,
   getPost,
   updatePost,
 } from "~/models/post.server";
+import invariant from "tiny-invariant";
 import { requireAdminUser } from "~/session.server";
 
 type LoaderData = { post?: Post };
 
 export const loader: LoaderFunction = async ({ request, params }) => {
   await requireAdminUser(request);
-  // return json({});
   invariant(params.slug, "slug is required");
-  if (params.slug == "new") {
+  if (params.slug === "new") {
     return json<LoaderData>({});
   }
   const post = await getPost(params.slug);
@@ -44,21 +42,14 @@ type ActionData =
   | undefined;
 
 export const action: ActionFunction = async ({ request, params }) => {
-  // return new Response(null, {
-  //   headers: {
-  //     status: "302",
-  //     Location: "posts/admin",
-  //   },
-  // });
-  // console.log(await request.formData());
   await requireAdminUser(request);
+  invariant(params.slug, "slug is required");
   const formData = await request.formData();
   const intent = formData.get("intent");
 
-  invariant(params.slug, "slug is required");
-  if (intent == "delete") {
+  if (intent === "delete") {
     await deletePost(params.slug);
-    return redirect(`/posts/admin`);
+    return redirect("/posts/admin");
   }
 
   const title = formData.get("title");
@@ -70,24 +61,22 @@ export const action: ActionFunction = async ({ request, params }) => {
     slug: slug ? null : "Slug is required",
     markdown: markdown ? null : "Markdown is required",
   };
-
-  const hasErrors = Object.values(errors).some((error) => error !== null);
-
+  const hasErrors = Object.values(errors).some((errorMessage) => errorMessage);
   if (hasErrors) {
     return json<ActionData>(errors);
   }
 
-  invariant(typeof title == "string", "title must be a string");
-  invariant(typeof slug == "string", "slug must be a string");
-  invariant(typeof markdown == "string", "markdown must be a string");
+  invariant(typeof title === "string", "title must be a string");
+  invariant(typeof slug === "string", "slug must be a string");
+  invariant(typeof markdown === "string", "markdown must be a string");
 
-  if (params.slug == "new") {
+  if (params.slug === "new") {
     await createPost({ title, slug, markdown });
   } else {
     await updatePost(params.slug, { title, slug, markdown });
   }
 
-  return redirect("posts/admin");
+  return redirect("/posts/admin");
 };
 
 const inputClassName = `w-full rounded border border-gray-500 px-2 py-1 text-lg`;
@@ -96,12 +85,14 @@ export default function NewPostRoute() {
   const data = useLoaderData() as LoaderData;
   const errors = useActionData() as ActionData;
 
-  const transition = useTransition();
-  // const isCreating = Boolean(transition.submission);
-  const isCreating = transition.submission?.formData.get("intent") == "create";
-  const isUpdating = transition.submission?.formData.get("intent") == "update";
-  const isDeleting = transition.submission?.formData.get("intent") == "delete";
+  // useEffect(() => {
+  //   blah();
+  // });
 
+  const transition = useTransition();
+  const isCreating = transition.submission?.formData.get("intent") === "create";
+  const isUpdating = transition.submission?.formData.get("intent") === "update";
+  const isDeleting = transition.submission?.formData.get("intent") === "delete";
   const isNewPost = !data.post;
 
   return (
@@ -135,10 +126,12 @@ export default function NewPostRoute() {
         </label>
       </p>
       <p>
-        <label htmlFor="markdown">Post Title: </label>
-        {errors?.markdown ? (
-          <em className="text-red-600">{errors.markdown}</em>
-        ) : null}
+        <label htmlFor="markdown">
+          Markdown:{" "}
+          {errors?.markdown ? (
+            <em className="text-red-600">{errors.markdown}</em>
+          ) : null}
+        </label>
         <textarea
           id="markdown"
           rows={20}
@@ -153,7 +146,7 @@ export default function NewPostRoute() {
             type="submit"
             name="intent"
             value="delete"
-            className="rounded bg-red-500 py-2 px-4 text-white hover:bg-red-600 disabled:bg-red-300"
+            className="rounded bg-red-500 py-2 px-4 text-white hover:bg-red-600 focus:bg-red-400 disabled:bg-red-300"
             disabled={isDeleting}
           >
             {isDeleting ? "Deleting..." : "Delete"}
@@ -162,8 +155,8 @@ export default function NewPostRoute() {
         <button
           type="submit"
           name="intent"
-          value={isCreating ? "create" : "update"}
-          className="rounded bg-blue-500 py-2 px-4 text-white hover:bg-blue-600 disabled:bg-blue-300"
+          value={isNewPost ? "create" : "update"}
+          className="rounded bg-blue-500 py-2 px-4 text-white hover:bg-blue-600 focus:bg-blue-400 disabled:bg-blue-300"
           disabled={isCreating || isUpdating}
         >
           {isNewPost ? (isCreating ? "Creating..." : "Create Post") : null}
@@ -177,21 +170,24 @@ export default function NewPostRoute() {
 export function CatchBoundary() {
   const caught = useCatch();
   const params = useParams();
-
-  if (caught.status == 404) {
-    return <div>OH NO DUDE! {params.slug} not found.</div>;
+  if (caught.status === 404) {
+    return (
+      <div className="text-red-500">
+        Uh oh! The post with the slug "{params.slug}" does not exist!
+      </div>
+    );
   }
-
-  throw new Error(`Unexpected error: ${caught.status}`);
+  throw new Error(`Unsupported thrown response status code: ${caught.status}`);
 }
 
 export function ErrorBoundary({ error }: { error: unknown }) {
   if (error instanceof Error) {
     return (
       <div className="text-red-500">
-        Oh no something went wrong!<pre>{error.message}</pre>
+        Oh no, something went wrong!
+        <pre>{error.message}</pre>
       </div>
     );
   }
-  return <div className="text-red-500">Oh no something went wrong!</div>;
+  return <div className="text-red-500">Oh no, something went wrong!</div>;
 }
